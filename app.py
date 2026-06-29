@@ -1,4 +1,4 @@
-# VERSION: parking_prices_v5_top_price_map
+# VERSION: parking_prices_v8_no_nearby_page_pdf_watch_report
 # This is the NEW app.py with:
 # - CSV-impact scoring
 # - more nearby businesses
@@ -1110,9 +1110,8 @@ def build_parkopedia_la_url(arriving_dt, leaving_dt):
 
 def nearby_price_status_text():
     return (
-        "This tab opens live Parkopedia searches for the selected lot/date/time. "
-        "The prices update dynamically on Parkopedia when you change the date or hour in the sidebar. "
-        "The app is not scraping or storing Parkopedia prices."
+        "This tab shows nearby competitor parking areas using your fixed lot coordinates. "
+        "External Parkopedia buttons and nearby-area lists were removed because those links were not reliable."
     )
 
 
@@ -1137,14 +1136,13 @@ def nearby_lots_for_price_lookup(selected_lot, max_miles=3.0):
 
 
 def build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0):
+    """Map nearby competitor parking areas without external Parkopedia links."""
     m = folium.Map(
         location=[selected_lot["lat"], selected_lot["lon"]],
         zoom_start=14,
         tiles="OpenStreetMap",
         control_scale=True,
     )
-
-    selected_url = build_parkopedia_url(selected_lot, arriving_dt, leaving_dt)
 
     folium.Marker(
         [selected_lot["lat"], selected_lot["lon"]],
@@ -1154,7 +1152,7 @@ def build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0)
             <div style="font-family:Arial; min-width:240px">
               <h4 style="margin:0 0 8px 0">{selected_lot['display']}</h4>
               <b>Your selected lot/area</b><br>
-              <a href="{selected_url}" target="_blank">Open live Parkopedia prices</a>
+              Use this as the center point for nearby competitor checks.
             </div>
             """,
             max_width=320,
@@ -1172,8 +1170,6 @@ def build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0)
     ).add_to(m)
 
     for lot, distance in nearby_lots_for_price_lookup(selected_lot, max_miles):
-        url = build_parkopedia_url(lot, arriving_dt, leaving_dt)
-
         folium.Marker(
             [lot["lat"], lot["lon"]],
             tooltip=f"{lot['display']} ({distance} mi)",
@@ -1182,8 +1178,7 @@ def build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0)
                 <div style="font-family:Arial; min-width:240px">
                   <h4 style="margin:0 0 8px 0">{lot['display']}</h4>
                   <b>Distance from selected lot:</b> {distance} miles<br>
-                  <b>Purpose:</b> price lookup area<br>
-                  <a href="{url}" target="_blank">Open live Parkopedia prices</a>
+                  <b>Purpose:</b> nearby competitor parking area
                 </div>
                 """,
                 max_width=320,
@@ -1200,19 +1195,8 @@ def build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0)
 
 st.set_page_config(page_title="Weekly Parking Demand Map", layout="wide")
 
-st.title("Weekly Parking Demand Map v5 — Nearby Prices + Demand")
+st.title("Weekly Parking Demand Map")
 st.caption("Upload one weekly CSV. The app combines fixed lots, business patterns, events, holidays, and weather into a busyness score.")
-
-with st.expander("Confirm this is the new app.py", expanded=False):
-    st.markdown(
-        """
-        You are running the updated version if you see:
-        - the title says **v5 — Nearby Prices + Demand**
-        - the sidebar download says **Download blank weekly CSV template**
-        - the top tabs include **Nearby prices**, **Demand map**, and **Details / weekly CSV**
-        - the Nearby prices tab appears before the demand map
-        """
-    )
 
 
 with st.sidebar:
@@ -1270,7 +1254,7 @@ with st.sidebar:
         index=0,
     )
 
-    st.caption("Use the top tabs to switch between Nearby prices, Demand map, and Details.")
+    st.caption("Use the top tabs to switch between Demand map and Lots to watch this week.")
 
 selected_lot = next(lot for lot in PARKING_LOTS if lot["display"] == selected_lot_name)
 
@@ -1283,69 +1267,14 @@ score, business_df, events_df, holidays_df, weather_df, breakdown = calculate_lo
     pre_event_window_hours,
 )
 
-price_tab, demand_tab, details_tab = st.tabs([
-    "Nearby prices",
+demand_tab, watch_tab = st.tabs([
     "Demand map",
-    "Details / weekly CSV",
+    "Lots to watch this week",
 ])
 
-with price_tab:
-    st.header("Nearby parking prices")
-    st.info(nearby_price_status_text())
-
-    parkopedia_url = build_parkopedia_url(selected_lot, arriving_dt, leaving_dt)
-    parkopedia_la_url = build_parkopedia_la_url(arriving_dt, leaving_dt)
-    nearby_price_lots = nearby_lots_for_price_lookup(selected_lot, max_miles=3.0)
-
-    p1, p2, p3, p4 = st.columns(4)
-    p1.metric("Selected area", selected_lot["display"])
-    p2.metric("Arriving", format_display_dt(arriving_dt))
-    p3.metric("Leaving", format_display_dt(leaving_dt))
-    p4.metric("Nearby areas", len(nearby_price_lots))
-
-    st.markdown("### Price lookup map")
-    st.caption(
-        "This is a separate map for competitor-price lookups. Click a marker, then open its live Parkopedia price page."
-    )
-
-    map_col, link_col = st.columns([1.45, 0.85])
-
-    with map_col:
-        st_folium(
-            build_price_lookup_map(selected_lot, arriving_dt, leaving_dt, max_miles=3.0),
-            height=650,
-            width=None,
-            returned_objects=[],
-            key=f"price_lookup_map_{selected_lot['lot_id']}_{selected_date}_{selected_hour}",
-        )
-
-    with link_col:
-        st.subheader("Live Parkopedia links")
-        st.link_button("Open selected lot prices", parkopedia_url)
-        st.link_button("Open Los Angeles prices", parkopedia_la_url)
-
-        st.markdown("#### Nearby areas")
-        if not nearby_price_lots:
-            st.info("No other company lots are within 3 miles of the selected lot.")
-        else:
-            for lot, distance in nearby_price_lots[:12]:
-                url = build_parkopedia_url(lot, arriving_dt, leaving_dt)
-                st.link_button(f"{lot['display']} ({distance} mi)", url)
-
-        with st.expander("Try embedded Parkopedia page"):
-            st.caption(
-                "Some sites block being embedded inside Streamlit. If this area is blank, use the buttons above."
-            )
-            components.iframe(parkopedia_url, height=650, scrolling=True)
-
-    st.markdown("### Pricing use")
-    st.markdown(
-        """
-        Use Parkopedia as a live competitor check for the same time window. If your demand score is high
-        and nearby public parking is more expensive, your lot may be underpriced. If demand is low and
-        nearby public parking is cheaper, your lot may be overpriced.
-        """
-    )
+# Nearby parking areas page intentionally removed/commented out.
+# The old price_tab section was causing clutter and relied on broken live Parkopedia behavior.
+# Keep the helper functions above for now in case you want to restore a cleaner competitor map later.
 
 with demand_tab:
     left, right = st.columns([1.45, 1])
@@ -1398,7 +1327,7 @@ with demand_tab:
 
         if breakdown["event_rows_used"] == 0:
             st.warning(
-                "No event rows matched this lot/date/hour. Check the Events tab, "
+                "No event rows matched this lot/date/hour. "
                 "increase the nearby event radius, or make sure the CSV parking_lot/date/time matches."
             )
 
@@ -1409,136 +1338,177 @@ with demand_tab:
         st.subheader("Lots to watch for this selected lot/date")
         render_watch_note_cards(selected_watch_notes)
 
-with details_tab:
-    subtab1, subtab2, subtab3, subtab4, subtab5 = st.tabs([
-        "Nearby businesses",
-        "Events",
-        "Weather / holidays",
-        "🚨 Lots to watch",
-        "Uploaded CSV",
-    ])
+with watch_tab:
+    st.subheader("Lots to watch this week")
 
-    with subtab1:
-        st.subheader("Nearby businesses and likely busy times")
-        st.dataframe(
-            business_df[["business", "category", "source", "status", "score", "weekday_peak", "weekend_peak"]],
-            use_container_width=True,
-            hide_index=True,
+    all_week_watch_notes = weekly_df[weekly_df["record_type"] == "watch_note"].copy()
+    real_week_watch_notes = filtered_real_watch_notes(all_week_watch_notes)
+
+    if real_week_watch_notes.empty:
+        st.warning(
+            "No real watch_note rows were found. Upload the CSV named "
+            "weekly_parking_upload_WITH_REAL_WATCH_NOTES_2026-06-29_to_2026-07-05.csv."
+        )
+    else:
+        critical_count = int(real_week_watch_notes.apply(watch_note_priority_value, axis=1).ge(4).sum())
+        high_count = int(real_week_watch_notes.apply(watch_note_priority_value, axis=1).eq(3).sum())
+
+        m1, m2, m3 = st.columns(3)
+        m1.metric("Critical notes", critical_count)
+        m2.metric("High-priority notes", high_count)
+        m3.metric("Total watch notes", len(real_week_watch_notes))
+
+        st.markdown("### Biggest things to watch this week")
+        render_watch_note_cards(real_week_watch_notes)
+
+    def build_lots_to_watch_pdf(watch_notes_df):
+        try:
+            from io import BytesIO
+            from html import escape
+            from reportlab.lib import colors
+            from reportlab.lib.pagesizes import letter
+            from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+            from reportlab.lib.units import inch
+            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, PageBreak
+        except ImportError as exc:
+            raise RuntimeError("PDF export needs ReportLab. Run this once: pip install reportlab") from exc
+
+        def ptext(value):
+            text = str(value or "").replace("–", "-").replace("—", "-")
+            return escape(text)
+
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            rightMargin=0.55 * inch,
+            leftMargin=0.55 * inch,
+            topMargin=0.55 * inch,
+            bottomMargin=0.55 * inch,
+            title="Biggest Things to Watch This Week",
         )
 
-    with subtab2:
-        st.subheader("Events affecting this lot at the selected date/hour")
-        if events_df.empty:
-            st.info("No matching event rows for this lot/time.")
-        else:
-            st.dataframe(
-                events_df[["date", "start_time", "end_time", "title", "parking_lot", "expected_people", "impact", "lat", "lon", "notes"]],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-        st.subheader("All event rows for the selected date")
-        all_day_events = weekly_df[
-            (weekly_df["record_type"] == "event") &
-            (weekly_df["date"] == selected_date)
-        ].copy()
-
-        if all_day_events.empty:
-            st.info("No event rows uploaded for this date.")
-        else:
-            st.dataframe(
-                all_day_events[["date", "start_time", "end_time", "title", "parking_lot", "expected_people", "impact", "lat", "lon", "notes"]],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    with subtab3:
-        st.subheader("Weather and holidays affecting this lot")
-        if weather_df.empty and holidays_df.empty:
-            st.info("No matching weather or holiday rows for this lot/time.")
-        else:
-            combined = pd.concat([weather_df, holidays_df], ignore_index=True)
-            st.dataframe(
-                combined[["date", "record_type", "title", "parking_lot", "weather_condition", "temp_f", "rain_chance", "impact", "notes"]],
-                use_container_width=True,
-                hide_index=True,
-            )
-
-    with subtab4:
-        st.subheader("Lots to watch this week")
-
-        all_week_watch_notes = weekly_df[weekly_df["record_type"] == "watch_note"].copy()
-        real_week_watch_notes = filtered_real_watch_notes(all_week_watch_notes)
-        manual_notes = all_week_watch_notes[all_week_watch_notes.apply(is_manual_placeholder, axis=1)].copy()
-
-        selected_watch_notes = filtered_real_watch_notes(
-            watch_notes_for_lot(weekly_df, selected_lot, selected_date)
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            "ReportTitle",
+            parent=styles["Title"],
+            fontSize=22,
+            leading=26,
+            spaceAfter=12,
+            textColor=colors.HexColor("#0f172a"),
         )
-        all_date_watch_notes = filtered_real_watch_notes(
-            all_watch_notes_for_date(weekly_df, selected_date)
+        h2_style = ParagraphStyle(
+            "WatchHeading",
+            parent=styles["Heading2"],
+            fontSize=14,
+            leading=17,
+            spaceBefore=10,
+            spaceAfter=6,
+            textColor=colors.HexColor("#111827"),
+        )
+        body_style = ParagraphStyle(
+            "WatchBody",
+            parent=styles["BodyText"],
+            fontSize=9.5,
+            leading=12,
+            spaceAfter=4,
+        )
+        small_style = ParagraphStyle(
+            "Small",
+            parent=styles["BodyText"],
+            fontSize=8.5,
+            leading=11,
+            textColor=colors.HexColor("#475569"),
         )
 
-        if real_week_watch_notes.empty:
-            st.warning(
-                "No real watch_note rows were found. Upload the CSV named "
-                "weekly_parking_upload_WITH_REAL_WATCH_NOTES_2026-06-29_to_2026-07-05.csv."
-            )
-        else:
-            critical_count = int(real_week_watch_notes.apply(watch_note_priority_value, axis=1).ge(4).sum())
-            high_count = int(real_week_watch_notes.apply(watch_note_priority_value, axis=1).eq(3).sum())
+        story = []
+        story.append(Paragraph("Biggest Things to Watch This Week", title_style))
+        story.append(Paragraph(f"Selected date in app: {ptext(selected_date)}", small_style))
+        story.append(Paragraph(f"Selected hour in app: {ptext(str(selected_hour) + ':00')}", small_style))
+        story.append(Paragraph(f"Generated: {ptext(datetime.now().strftime('%Y-%m-%d %I:%M %p'))}", small_style))
+        story.append(Spacer(1, 0.18 * inch))
 
-            m1, m2, m3 = st.columns(3)
-            m1.metric("Critical notes", critical_count)
-            m2.metric("High-priority notes", high_count)
-            m3.metric("Total watch notes", len(real_week_watch_notes))
+        if watch_notes_df.empty:
+            story.append(Paragraph("No major lots-to-watch notes were found for this week.", body_style))
+            doc.build(story)
+            buffer.seek(0)
+            return buffer.getvalue()
 
-            st.markdown("### Biggest things to watch this week")
-            render_watch_note_cards(real_week_watch_notes)
+        sorted_notes = sort_watch_notes(watch_notes_df)
+        critical_count = int(sorted_notes.apply(watch_note_priority_value, axis=1).ge(4).sum())
+        high_count = int(sorted_notes.apply(watch_note_priority_value, axis=1).eq(3).sum())
 
-        st.markdown("### Matching the selected lot/date")
-        render_watch_note_cards(selected_watch_notes)
+        summary_table = Table(
+            [
+                [Paragraph("Critical", small_style), Paragraph("High priority", small_style), Paragraph("Total watch notes", small_style)],
+                [Paragraph(str(critical_count), body_style), Paragraph(str(high_count), body_style), Paragraph(str(len(sorted_notes)), body_style)],
+            ],
+            colWidths=[1.75 * inch, 1.75 * inch, 1.75 * inch],
+        )
+        summary_table.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#eef2ff")),
+            ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#cbd5e1")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 8),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+            ("TOPPADDING", (0, 0), (-1, -1), 6),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ]))
+        story.append(summary_table)
+        story.append(Spacer(1, 0.18 * inch))
 
-        st.markdown("### All watch notes for selected date")
-        if all_date_watch_notes.empty:
-            st.info("No specific watch notes uploaded for this date.")
-        else:
-            render_watch_note_cards(all_date_watch_notes)
+        for index, (_, row) in enumerate(sorted_notes.iterrows(), start=1):
+            fields = watch_note_summary_fields(row)
+            priority_value = watch_note_priority_value(row)
+            heading = f"{index}. {fields['title']}"
+            story.append(Paragraph(ptext(heading), h2_style))
 
-        with st.expander("Manual closure checklist"):
-            if manual_notes.empty:
-                st.info("No manual closure placeholder notes uploaded.")
-            else:
-                render_watch_note_cards(manual_notes)
+            priority_bg = colors.HexColor("#fee2e2") if priority_value >= 4 else colors.HexColor("#fef3c7") if priority_value >= 3 else colors.HexColor("#e0f2fe")
 
-        st.markdown("### Watch-note table")
-        if real_week_watch_notes.empty:
-            st.info("No watch-note table to show.")
-        else:
-            table_cols = [
-                "date_raw", "start_time", "priority", "direction", "title",
-                "parking_lot", "reason_type", "reason", "expected_impact", "suggested_action"
+            table_rows = [
+                [Paragraph("Priority", small_style), Paragraph(ptext(fields["priority"]), body_style)],
+                [Paragraph("Direction", small_style), Paragraph(ptext(fields["direction"] or "Not specified"), body_style)],
+                [Paragraph("When", small_style), Paragraph(ptext(fields["time_window"]), body_style)],
+                [Paragraph("Lots", small_style), Paragraph(ptext(fields["lot_text"]), body_style)],
             ]
-            table_cols = [c for c in table_cols if c in real_week_watch_notes.columns]
-            st.dataframe(sort_watch_notes(real_week_watch_notes)[table_cols], use_container_width=True, hide_index=True)
+            if fields["reason_type"]:
+                table_rows.append([Paragraph("Why", small_style), Paragraph(ptext(fields["reason_type"]), body_style)])
+            if fields["expected_impact"]:
+                table_rows.append([Paragraph("Expected impact", small_style), Paragraph(ptext(fields["expected_impact"]), body_style)])
+            if fields["suggested_action"]:
+                table_rows.append([Paragraph("Suggested action", small_style), Paragraph(ptext(fields["suggested_action"]), body_style)])
+            if fields["reason"]:
+                table_rows.append([Paragraph("Details", small_style), Paragraph(ptext(fields["reason"]), body_style)])
 
-    with subtab5:
-        st.subheader("Current uploaded CSV data")
-        st.dataframe(weekly_df, use_container_width=True, hide_index=True)
+            details_table = Table(table_rows, colWidths=[1.25 * inch, 6.0 * inch])
+            details_table.setStyle(TableStyle([
+                ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#f8fafc")),
+                ("BACKGROUND", (1, 0), (1, 0), priority_bg),
+                ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#cbd5e1")),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("LEFTPADDING", (0, 0), (-1, -1), 7),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+                ("TOPPADDING", (0, 0), (-1, -1), 5),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+            ]))
+            story.append(details_table)
+            story.append(Spacer(1, 0.14 * inch))
 
-        st.markdown(
-            """
-            **CSV columns you can use:**
+            if index % 4 == 0 and index != len(sorted_notes):
+                story.append(PageBreak())
 
-            `date`, `start_time`, `end_time`, `record_type`, `title`, `parking_lot`,
-            `expected_people`, `weather_condition`, `temp_f`, `rain_chance`, `impact`,
-            `lat`, `lon`, `notes`, `category`, `base_popularity`, `weekday_peak`, `weekend_peak`
+        doc.build(story)
+        buffer.seek(0)
+        return buffer.getvalue()
 
-            `record_type` can be: `event`, `weather`, `holiday`, `business`, or `watch_note`.
-
-            `parking_lot` can be an exact lot name, a display name, a zone-ish name, or `all`.
-
-            Event rows with `lat` and `lon` can affect lots within the sidebar event radius.
-            """
+    try:
+        report_pdf = build_lots_to_watch_pdf(real_week_watch_notes)
+        st.download_button(
+            label="Download PDF report: Biggest Things to Watch This Week",
+            data=report_pdf,
+            file_name="biggest_things_to_watch_this_week.pdf",
+            mime="application/pdf",
+            width="stretch",
         )
-
-
+    except RuntimeError as exc:
+        st.error(str(exc))
