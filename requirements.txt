@@ -6,3 +6,4 @@ geopy
 folium
 streamlit-folium
 scikit-learn
+reportlab
